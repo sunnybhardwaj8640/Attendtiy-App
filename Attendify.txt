@@ -1,0 +1,1726 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Animated,
+  Dimensions,
+  StatusBar,
+  Alert,
+  Modal,
+  Appearance
+} from 'react-native';
+import { CameraView, Camera } from 'expo-camera';
+
+const { width, height } = Dimensions.get('window');
+
+// Professional color scheme
+const Colors = {
+  primary: '#6366F1',
+  primaryLight: '#818CF8',
+  primaryDark: '#4F46E5',
+  secondary: '#EC4899',
+  success: '#10B981',
+  warning: '#F59E0B',
+  error: '#EF4444',
+  light: {
+    background: '#F8FAFC',
+    card: '#FFFFFF',
+    text: '#1E293B',
+    textSecondary: '#64748B',
+    border: '#E2E8F0'
+  },
+  dark: {
+    background: '#0F172A',
+    card: '#1E293B',
+    text: '#F1F5F9',
+    textSecondary: '#94A3B8',
+    border: '#334155'
+  }
+};
+
+export default function App() {
+  const colorScheme = Appearance.getColorScheme();
+  const [darkMode, setDarkMode] = useState(colorScheme === 'dark');
+  const [currentScreen, setCurrentScreen] = useState('splash');
+  const [hasCameraPermission, setHasCameraPermission] = useState(null);
+  const [cameraVisible, setCameraVisible] = useState(false);
+  const [qrScannerVisible, setQrScannerVisible] = useState(false);
+  const [attendanceData, setAttendanceData] = useState([]);
+  const [classes, setClasses] = useState([
+    { id: 1, name: 'Mathematics 101', students: 45, present: 32 },
+    { id: 2, name: 'Physics 201', students: 38, present: 28 },
+    { id: 3, name: 'Computer Science', students: 52, present: 45 },
+  ]);
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [offlineData, setOfflineData] = useState([]);
+  const [isOnline, setIsOnline] = useState(true);
+
+  // Animation refs
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.3)).current;
+  const slideUpAnim = useRef(new Animated.Value(50)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const bounceAnim = useRef(new Animated.Value(0)).current;
+
+  const colors = darkMode ? Colors.dark : Colors.light;
+
+  useEffect(() => {
+    // Request camera permission
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasCameraPermission(status === 'granted');
+    })();
+
+    startSplashAnimations();
+  }, []);
+
+  const startSplashAnimations = () => {
+    // Main entrance animations
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideUpAnim, {
+        toValue: 0,
+        duration: 2000,
+        useNativeDriver: true,
+      })
+    ]).start();
+
+    // Pulse animation for logo
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.2,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Rotate animation
+    Animated.loop(
+      Animated.timing(rotateAnim, {
+        toValue: 1,
+        duration: 4000,
+        useNativeDriver: true,
+      })
+    ).start();
+
+    // Progress bar animation
+    Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: 3000,
+      useNativeDriver: false,
+    }).start();
+
+    // Bounce animation for tagline
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(bounceAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bounceAnim, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Move to welcome screen after 4 seconds
+    setTimeout(() => {
+      setCurrentScreen('welcome');
+    }, 4000);
+  };
+
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+  };
+
+  const handleFaceRecognition = () => {
+    if (!hasCameraPermission) {
+      Alert.alert('Permission Required', 'Camera permission is needed for face recognition');
+      return;
+    }
+    setCameraVisible(true);
+  };
+
+  const handleQRScan = () => {
+    if (!hasCameraPermission) {
+      Alert.alert('Permission Required', 'Camera permission is needed for QR scanning');
+      return;
+    }
+    setQrScannerVisible(true);
+  };
+
+  const handleGeoFencing = () => {
+    Alert.alert(
+      '📍 Geo-Fencing Active',
+      'Classroom location has been marked for automatic attendance tracking within 100m radius.',
+      [{ text: 'OK', style: 'default' }]
+    );
+  };
+
+  const markAttendance = (method, scannedData = null) => {
+    const studentId = scannedData || `STU${Math.floor(1000 + Math.random() * 9000)}`;
+    const newRecord = {
+      id: Date.now().toString(),
+      studentId,
+      method,
+      timestamp: new Date().toLocaleTimeString(),
+      date: new Date().toLocaleDateString(),
+      class: selectedClass?.name || 'General Class',
+      status: 'Present'
+    };
+
+    if (isOnline) {
+      setAttendanceData(prev => [newRecord, ...prev]);
+      
+      // Update class attendance
+      if (selectedClass) {
+        setClasses(prev => prev.map(cls => 
+          cls.id === selectedClass.id 
+            ? { ...cls, present: cls.present + 1 }
+            : cls
+        ));
+      }
+
+      Alert.alert(
+        '✅ Attendance Recorded',
+        `Successfully marked attendance via ${method}\nStudent: ${studentId}\nClass: ${selectedClass?.name || 'General'}`,
+        [{ text: 'OK', style: 'default' }]
+      );
+    } else {
+      setOfflineData(prev => [newRecord, ...prev]);
+      Alert.alert(
+        '📱 Offline Mode',
+        `Attendance saved locally. Will sync when online.\nMethod: ${method}`,
+        [{ text: 'OK', style: 'default' }]
+      );
+    }
+  };
+
+  const syncOfflineData = () => {
+    if (offlineData.length > 0) {
+      setAttendanceData(prev => [...offlineData, ...prev]);
+      setOfflineData([]);
+      Alert.alert(
+        '🔄 Sync Complete',
+        `Successfully synchronized ${offlineData.length} offline records.`,
+        [{ text: 'OK', style: 'default' }]
+      );
+    }
+  };
+
+  // Custom Icon Component with beautiful icons
+  const Icon = ({ name, size = 24, color = colors.text, style }) => {
+    const iconMap = {
+      // Main icons
+      school: '🏫',
+      camera: '📷',
+      qr: '📱',
+      location: '📍',
+      chart: '📊',
+      bell: '🔔',
+      cloud: '☁️',
+      cloudOff: '📴',
+      check: '✅',
+      arrowRight: '➡️',
+      arrowLeft: '⬅️',
+      close: '❌',
+      add: '➕',
+      home: '🏠',
+      menu: '☰',
+      sync: '🔄',
+      time: '⏰',
+      moon: '🌙',
+      sun: '☀️',
+      face: '👤',
+      scan: '🔍',
+      students: '👥',
+      calendar: '📅',
+      clock: '⏱️',
+      user: '👨‍🎓',
+      teacher: '👨‍🏫',
+      book: '📚',
+      graduate: '🎓',
+      analytics: '📈',
+      security: '🔒',
+      wifi: '📶',
+      offline: '🔌'
+    };
+
+    return (
+      <Text style={[{
+        fontSize: size,
+        color: color,
+        textShadowColor: 'rgba(0,0,0,0.1)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
+      }, style]}>
+        {iconMap[name] || '●'}
+      </Text>
+    );
+  };
+
+  const FeatureCard = ({ icon, title, description, onPress, color }) => (
+    <TouchableOpacity 
+      style={[
+        styles.featureCard, 
+        { 
+          backgroundColor: colors.card,
+          borderLeftColor: color,
+          shadowColor: colors.text,
+        }
+      ]} 
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.iconContainer, { 
+        backgroundColor: color,
+        shadowColor: color,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
+      }]}>
+        <Icon name={icon} size={28} color="white" />
+      </View>
+      <View style={styles.featureText}>
+        <Text style={[styles.featureTitle, { color: colors.text }]}>{title}</Text>
+        <Text style={[styles.featureDescription, { color: colors.textSecondary }]}>{description}</Text>
+      </View>
+      <View style={[styles.arrowContainer, { backgroundColor: colors.border }]}>
+        <Icon name="arrowRight" size={16} color={colors.textSecondary} />
+      </View>
+    </TouchableOpacity>
+  );
+
+  const ClassCard = ({ classItem }) => {
+    const attendancePercentage = (classItem.present / classItem.students) * 100;
+    
+    return (
+      <TouchableOpacity 
+        style={[
+          styles.classCard, 
+          { 
+            backgroundColor: colors.card,
+            shadowColor: colors.text,
+            borderColor: selectedClass?.id === classItem.id ? Colors.primary : 'transparent',
+            transform: [{ scale: selectedClass?.id === classItem.id ? 0.98 : 1 }]
+          }
+        ]}
+        onPress={() => setSelectedClass(classItem)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.classHeader}>
+          <View style={styles.classInfo}>
+            <Icon name="book" size={20} color={Colors.primary} />
+            <Text style={[styles.className, { color: colors.text }]}>{classItem.name}</Text>
+          </View>
+          <View style={[styles.attendanceBadge, { 
+            backgroundColor: attendancePercentage >= 80 ? Colors.success : 
+                           attendancePercentage >= 60 ? Colors.warning : Colors.error 
+          }]}>
+            <Text style={styles.attendanceText}>
+              {classItem.present}/{classItem.students}
+            </Text>
+          </View>
+        </View>
+        
+        <View style={styles.attendanceStats}>
+          <View style={styles.statsRow}>
+            <Text style={[styles.statsLabel, { color: colors.textSecondary }]}>Attendance Rate</Text>
+            <Text style={[styles.statsValue, { color: colors.text }]}>
+              {Math.round(attendancePercentage)}%
+            </Text>
+          </View>
+          <View style={[styles.attendanceBar, { backgroundColor: colors.border }]}>
+            <Animated.View 
+              style={[
+                styles.attendanceFill, 
+                { 
+                  width: `${attendancePercentage}%`,
+                  backgroundColor: attendancePercentage >= 80 ? Colors.success : 
+                                 attendancePercentage >= 60 ? Colors.warning : Colors.error
+                }
+              ]} 
+            />
+          </View>
+        </View>
+        
+        <View style={styles.classFooter}>
+          <View style={styles.footerItem}>
+            <Icon name="user" size={14} color={colors.textSecondary} />
+            <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+              {classItem.students} students
+            </Text>
+          </View>
+          <View style={styles.footerItem}>
+            <Icon name="clock" size={14} color={colors.textSecondary} />
+            <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+              {classItem.present} present
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // Animation interpolations
+  const rotateInterpolate = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const bounceInterpolate = bounceAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -10],
+  });
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
+
+  // Splash Screen
+  if (currentScreen === 'splash') {
+    return (
+      <View style={[styles.splashContainer, { 
+        backgroundColor: Colors.primary,
+        backgroundGradient: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)'
+      }]}>
+        <StatusBar hidden />
+        <Animated.View 
+          style={[
+            styles.splashContent,
+            {
+              opacity: fadeAnim,
+              transform: [
+                { translateY: slideUpAnim },
+                { scale: scaleAnim }
+              ]
+            }
+          ]}
+        >
+          {/* Animated Logo */}
+          <Animated.View 
+            style={[
+              styles.logoContainer,
+              {
+                transform: [
+                  { scale: pulseAnim },
+                  { rotate: rotateInterpolate }
+                ]
+              }
+            ]}
+          >
+            <View style={styles.logo}>
+              <Icon name="graduate" size={70} color="white" />
+            </View>
+            <View style={styles.logoRing} />
+          </Animated.View>
+          
+          {/* App Title */}
+          <Text style={styles.splashTitle}>Attendify</Text>
+          
+          {/* Animated Tagline */}
+          <Animated.View style={{ transform: [{ translateY: bounceInterpolate }] }}>
+            <Text style={styles.splashTagline}>Smart Attendance for Smarter Classrooms</Text>
+          </Animated.View>
+          
+          {/* Loading Progress */}
+          <View style={styles.loadingContainer}>
+            <View style={styles.loadingBackground}>
+              <Animated.View 
+                style={[
+                  styles.loadingProgress,
+                  { width: progressWidth }
+                ]} 
+              />
+            </View>
+            <Text style={styles.loadingText}>Initializing Smart System...</Text>
+          </View>
+          
+          {/* Copyright */}
+          <View style={styles.copyright}>
+            <Text style={styles.copyrightText}>© 2025 Sunny Bhardwaj • Professional Education Technology</Text>
+          </View>
+        </Animated.View>
+        
+        {/* Background Animation Elements */}
+        <View style={styles.floatingCircle1} />
+        <View style={styles.floatingCircle2} />
+        <View style={styles.floatingCircle3} />
+      </View>
+    );
+  }
+
+  // Welcome Screen
+  if (currentScreen === 'welcome') {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar backgroundColor={Colors.primary} barStyle="light-content" />
+        
+        {/* Header */}
+        <View style={[styles.welcomeHeader, { 
+          backgroundColor: Colors.primary,
+          backgroundGradient: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)'
+        }]}>
+          <Animated.View style={{ 
+            transform: [{ scale: pulseAnim }],
+            opacity: fadeAnim 
+          }}>
+            <View style={styles.welcomeLogo}>
+              <Icon name="check" size={50} color="white" />
+              <View style={styles.logoGlow} />
+            </View>
+          </Animated.View>
+          <Text style={styles.welcomeTitle}>Welcome to Attendify</Text>
+          <Text style={styles.welcomeSubtitle}>Transform your classroom with intelligent attendance management</Text>
+        </View>
+        
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Theme Toggle */}
+          <View style={styles.themeSection}>
+            <TouchableOpacity 
+              onPress={toggleDarkMode} 
+              style={[
+                styles.themeButton,
+                { backgroundColor: colors.card }
+              ]}
+            >
+              <Icon name={darkMode ? "sun" : "moon"} size={20} color={colors.text} />
+              <Text style={[styles.themeText, { color: colors.text }]}>
+                {darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              </Text>
+              <View style={[
+                styles.themeIndicator,
+                { backgroundColor: darkMode ? Colors.warning : Colors.primary }
+              ]} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Features Grid */}
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Smart Features</Text>
+          
+          <FeatureCard
+            icon="face"
+            title="AI Face Recognition"
+            description="Advanced facial recognition for automatic attendance marking"
+            color="#4CAF50"
+            onPress={handleFaceRecognition}
+          />
+          
+          <FeatureCard
+            icon="scan"
+            title="QR Code Scanner"
+            description="Instant check-in with secure QR code technology"
+            color="#2196F3"
+            onPress={handleQRScan}
+          />
+          
+          <FeatureCard
+            icon="location"
+            title="Smart Geo-Fencing"
+            description="Automatic attendance within designated classroom areas"
+            color="#FF9800"
+            onPress={handleGeoFencing}
+          />
+          
+          <FeatureCard
+            icon="analytics"
+            title="Live Dashboard"
+            description="Real-time analytics and attendance insights"
+            color="#9C27B0"
+            onPress={() => setCurrentScreen('dashboard')}
+          />
+          
+          <FeatureCard
+            icon="bell"
+            title="Instant Notifications"
+            description="Real-time alerts for attendance events"
+            color="#F44336"
+            onPress={() => Alert.alert('🔔 Notifications', 'Smart alert system activated!')}
+          />
+          
+          <FeatureCard
+            icon="offline"
+            title="Offline Mode"
+            description="Work seamlessly without internet connection"
+            color="#607D8B"
+            onPress={() => {
+              setIsOnline(!isOnline);
+              Alert.alert(
+                isOnline ? '📴 Offline Mode' : '📶 Online Mode', 
+                `Switched to ${isOnline ? 'offline' : 'online'} mode. ${isOnline ? 'Attendance will be saved locally.' : 'All systems connected.'}`
+              );
+            }}
+          />
+          
+          <FeatureCard
+            icon="students"
+            title="Multi-Class Management"
+            description="Handle multiple classes and subjects efficiently"
+            color="#009688"
+            onPress={() => setCurrentScreen('classes')}
+          />
+        </ScrollView>
+        
+        {/* Get Started Button */}
+        <TouchableOpacity 
+          style={[
+            styles.getStartedButton, 
+            { 
+              backgroundColor: Colors.primary,
+              shadowColor: Colors.primary,
+            }
+          ]}
+          onPress={() => setCurrentScreen('dashboard')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.getStartedText}>Launch Dashboard</Text>
+          <Icon name="arrowRight" size={20} color="white" />
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Dashboard Screen
+  if (currentScreen === 'dashboard') {
+    const totalPresent = classes.reduce((acc, cls) => acc + cls.present, 0);
+    const totalStudents = classes.reduce((acc, cls) => acc + cls.students, 0);
+    const overallPercentage = totalStudents > 0 ? (totalPresent / totalStudents) * 100 : 0;
+
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar backgroundColor={Colors.primary} barStyle="light-content" />
+        
+        {/* Header */}
+        <View style={[styles.header, { 
+          backgroundColor: Colors.primary,
+          backgroundGradient: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)'
+        }]}>
+          <TouchableOpacity onPress={() => setCurrentScreen('welcome')} style={styles.headerButton}>
+            <Icon name="arrowLeft" size={24} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Dashboard</Text>
+            <Text style={styles.headerSubtitle}>Real-time Attendance Analytics</Text>
+          </View>
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={() => setIsOnline(!isOnline)} style={styles.headerButton}>
+              <Icon name={isOnline ? "wifi" : "offline"} size={20} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={toggleDarkMode} style={styles.headerButton}>
+              <Icon name={darkMode ? "sun" : "moon"} size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Overall Stats */}
+          <View style={[styles.overviewCard, { backgroundColor: colors.card }]}>
+            <Text style={[styles.overviewTitle, { color: colors.text }]}>Today's Overview</Text>
+            <View style={styles.overviewStats}>
+              <View style={styles.overviewStat}>
+                <Icon name="user" size={24} color={Colors.primary} />
+                <Text style={[styles.overviewNumber, { color: colors.text }]}>{totalPresent}</Text>
+                <Text style={[styles.overviewLabel, { color: colors.textSecondary }]}>Present</Text>
+              </View>
+              <View style={styles.overviewStat}>
+                <Icon name="calendar" size={24} color={Colors.success} />
+                <Text style={[styles.overviewNumber, { color: colors.text }]}>{attendanceData.length}</Text>
+                <Text style={[styles.overviewLabel, { color: colors.textSecondary }]}>Records</Text>
+              </View>
+              <View style={styles.overviewStat}>
+                <Icon name="cloud" size={24} color={Colors.warning} />
+                <Text style={[styles.overviewNumber, { color: colors.text }]}>{offlineData.length}</Text>
+                <Text style={[styles.overviewLabel, { color: colors.textSecondary }]}>Pending</Text>
+              </View>
+            </View>
+            <View style={styles.overviewProgress}>
+              <Text style={[styles.progressLabel, { color: colors.textSecondary }]}>
+                Overall Attendance: {Math.round(overallPercentage)}%
+              </Text>
+              <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
+                <View 
+                  style={[
+                    styles.progressFill, 
+                    { 
+                      width: `${overallPercentage}%`,
+                      backgroundColor: overallPercentage >= 80 ? Colors.success : 
+                                     overallPercentage >= 60 ? Colors.warning : Colors.error
+                    }
+                  ]} 
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Quick Actions */}
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
+          <View style={styles.quickActions}>
+            <TouchableOpacity 
+              style={[styles.quickAction, { backgroundColor: colors.card }]} 
+              onPress={handleFaceRecognition}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#4CAF50' }]}>
+                <Icon name="face" size={32} color="white" />
+              </View>
+              <Text style={[styles.quickActionText, { color: colors.text }]}>Face ID</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.quickAction, { backgroundColor: colors.card }]} 
+              onPress={handleQRScan}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#2196F3' }]}>
+                <Icon name="scan" size={32} color="white" />
+              </View>
+              <Text style={[styles.quickActionText, { color: colors.text }]}>QR Scan</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.quickAction, { backgroundColor: colors.card }]} 
+              onPress={handleGeoFencing}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#FF9800' }]}>
+                <Icon name="location" size={28} color="white" />
+              </View>
+              <Text style={[styles.quickActionText, { color: colors.text }]}>Geo-Fence</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Sync Button */}
+          {offlineData.length > 0 && (
+            <TouchableOpacity 
+              style={[styles.syncButton, { backgroundColor: Colors.success }]} 
+              onPress={syncOfflineData}
+            >
+              <Icon name="sync" size={20} color="white" />
+              <Text style={styles.syncButtonText}>Sync {offlineData.length} Offline Records</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Recent Activity */}
+          <View style={styles.activitySection}>
+            <View style={styles.activityHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Activity</Text>
+              <Text style={[styles.seeAllText, { color: Colors.primary }]}>See All</Text>
+            </View>
+            
+            {attendanceData.slice(0, 5).map((record, index) => (
+              <Animated.View 
+                key={record.id}
+                style={[
+                  styles.activityItem, 
+                  { 
+                    backgroundColor: colors.card,
+                    opacity: fadeAnim,
+                    transform: [
+                      { translateX: slideUpAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [50 * (index + 1), 0]
+                      })}
+                    ]
+                  }
+                ]}
+              >
+                <View style={[
+                  styles.activityIcon,
+                  { backgroundColor: record.method.includes('Face') ? '#4CAF50' : '#2196F3' }
+                ]}>
+                  <Icon 
+                    name={record.method.includes('Face') ? "face" : "scan"} 
+                    size={20} 
+                    color="white" 
+                  />
+                </View>
+                <View style={styles.activityDetails}>
+                  <Text style={[styles.activityText, { color: colors.text }]}>
+                    Student {record.studentId}
+                  </Text>
+                  <Text style={[styles.activityTime, { color: colors.textSecondary }]}>
+                    {record.timestamp} • {record.class}
+                  </Text>
+                </View>
+                <View style={styles.activityStatus}>
+                  <Text style={[styles.statusText, { color: Colors.success }]}>{record.status}</Text>
+                  <Text style={[styles.methodText, { color: colors.textSecondary }]}>
+                    {record.method}
+                  </Text>
+                </View>
+              </Animated.View>
+            ))}
+            
+            {attendanceData.length === 0 && (
+              <View style={[styles.emptyState, { backgroundColor: colors.card }]}>
+                <Icon name="time" size={50} color={colors.textSecondary} />
+                <Text style={[styles.emptyStateText, { color: colors.text }]}>
+                  No attendance records yet
+                </Text>
+                <Text style={[styles.emptyStateSubtext, { color: colors.textSecondary }]}>
+                  Mark your first attendance to see records here
+                </Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+
+        {/* Bottom Navigation */}
+        <View style={[styles.navBar, { 
+          backgroundColor: colors.card, 
+          borderTopColor: colors.border,
+          shadowColor: colors.text,
+        }]}>
+          <TouchableOpacity style={styles.navItem}>
+            <Icon name="home" size={24} color={Colors.primary} />
+            <Text style={[styles.navTextActive, { color: Colors.primary }]}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('classes')}>
+            <Icon name="students" size={24} color={colors.textSecondary} />
+            <Text style={[styles.navText, { color: colors.textSecondary }]}>Classes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setCurrentScreen('welcome')}>
+            <Icon name="menu" size={24} color={colors.textSecondary} />
+            <Text style={[styles.navText, { color: colors.textSecondary }]}>Menu</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // Classes Screen
+  if (currentScreen === 'classes') {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar backgroundColor={Colors.primary} barStyle="light-content" />
+        <View style={[styles.header, { 
+          backgroundColor: Colors.primary,
+          backgroundGradient: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)'
+        }]}>
+          <TouchableOpacity onPress={() => setCurrentScreen('dashboard')}>
+            <Icon name="arrowLeft" size={24} color="white" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Class Management</Text>
+          <TouchableOpacity>
+            <Icon name="add" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Classes</Text>
+          {classes.map((classItem, index) => (
+            <ClassCard key={classItem.id} classItem={classItem} />
+          ))}
+
+          {selectedClass && (
+            <View style={styles.classActions}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Quick Actions for {selectedClass.name}
+              </Text>
+              <View style={styles.actionButtons}>
+                <TouchableOpacity 
+                  style={[styles.actionButton, { 
+                    backgroundColor: Colors.primary,
+                    shadowColor: Colors.primary,
+                  }]}
+                  onPress={() => markAttendance('Face Recognition')}
+                >
+                  <Icon name="face" size={20} color="white" />
+                  <Text style={styles.actionButtonText}>Mark Face Attendance</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.actionButton, { 
+                    backgroundColor: Colors.primary,
+                    shadowColor: Colors.primary,
+                  }]}
+                  onPress={() => markAttendance('QR Code')}
+                >
+                  <Icon name="scan" size={20} color="white" />
+                  <Text style={styles.actionButtonText}>Scan QR Code</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // Camera Modals
+  return (
+    <View style={styles.container}>
+      {/* Face Recognition Modal */}
+      <Modal visible={cameraVisible} animationType="slide" statusBarTranslucent>
+        <View style={styles.modalContainer}>
+          <View style={[styles.modalHeader, { backgroundColor: 'rgba(0,0,0,0.9)' }]}>
+            <TouchableOpacity onPress={() => setCameraVisible(false)}>
+              <Icon name="close" size={30} color="white" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>AI Face Recognition</Text>
+            <View style={{ width: 30 }} />
+          </View>
+          
+          {hasCameraPermission ? (
+            <CameraView style={styles.camera} facing={'front'}>
+              <View style={styles.faceFrame}>
+                <View style={styles.faceFrameInner} />
+                <Text style={styles.faceFrameText}>Position face within frame</Text>
+              </View>
+              
+              <View style={styles.cameraControls}>
+                <TouchableOpacity 
+                  style={[styles.captureButton, { 
+                    backgroundColor: Colors.primary,
+                    shadowColor: Colors.primary,
+                  }]}
+                  onPress={() => {
+                    markAttendance('Face Recognition');
+                    setCameraVisible(false);
+                  }}
+                >
+                  <Icon name="face" size={30} color="white" />
+                </TouchableOpacity>
+              </View>
+            </CameraView>
+          ) : (
+            <View style={styles.cameraPlaceholder}>
+              <Icon name="camera" size={80} color="#666" />
+              <Text style={styles.cameraText}>Camera permission required</Text>
+            </View>
+          )}
+        </View>
+      </Modal>
+
+      {/* QR Scanner Modal */}
+      <Modal visible={qrScannerVisible} animationType="slide" statusBarTranslucent>
+        <View style={styles.modalContainer}>
+          <View style={[styles.modalHeader, { backgroundColor: 'rgba(0,0,0,0.9)' }]}>
+            <TouchableOpacity onPress={() => setQrScannerVisible(false)}>
+              <Icon name="close" size={30} color="white" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>QR Code Scanner</Text>
+            <View style={{ width: 30 }} />
+          </View>
+          
+          {hasCameraPermission ? (
+            <CameraView 
+              style={styles.camera} 
+              facing={'back'}
+              barcodeScannerSettings={{
+                barcodeTypes: ["qr"],
+              }}
+              onBarcodeScanned={(result) => {
+                if (result.data) {
+                  markAttendance('QR Code', result.data);
+                  setQrScannerVisible(false);
+                }
+              }}
+            >
+              <View style={styles.qrFrame}>
+                <View style={[styles.qrCorner, styles.qrCornerTL]} />
+                <View style={[styles.qrCorner, styles.qrCornerTR]} />
+                <View style={[styles.qrCorner, styles.qrCornerBL]} />
+                <View style={[styles.qrCorner, styles.qrCornerBR]} />
+                <Text style={styles.qrFrameText}>Align QR code within frame</Text>
+              </View>
+            </CameraView>
+          ) : (
+            <View style={styles.cameraPlaceholder}>
+              <Icon name="scan" size={80} color="#666" />
+              <Text style={styles.cameraText}>Camera permission required</Text>
+            </View>
+          )}
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  // Splash Screen
+  splashContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  splashContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  logoContainer: {
+    marginBottom: 40,
+    position: 'relative',
+  },
+  logo: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  logoRing: {
+    position: 'absolute',
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.2)',
+    top: -10,
+    left: -10,
+  },
+  splashTitle: {
+    fontSize: 52,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 16,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 8,
+    letterSpacing: 1,
+  },
+  splashTagline: {
+    fontSize: 18,
+    color: 'white',
+    textAlign: 'center',
+    opacity: 0.9,
+    marginBottom: 50,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    width: 280,
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  loadingBackground: {
+    width: '100%',
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  loadingProgress: {
+    height: '100%',
+    backgroundColor: 'white',
+    borderRadius: 3,
+  },
+  loadingText: {
+    color: 'white',
+    fontSize: 14,
+    opacity: 0.8,
+    fontWeight: '500',
+  },
+  copyright: {
+    position: 'absolute',
+    bottom: 30,
+  },
+  copyrightText: {
+    color: 'white',
+    fontSize: 12,
+    opacity: 0.7,
+    textAlign: 'center',
+  },
+  floatingCircle1: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    top: '20%',
+    left: '10%',
+  },
+  floatingCircle2: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    bottom: '20%',
+    right: '10%',
+  },
+  floatingCircle3: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    top: '60%',
+    left: '70%',
+  },
+
+  // Common Styles
+  container: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    padding: 20,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    marginTop: 10,
+    letterSpacing: 0.5,
+  },
+
+  // Header Styles
+  welcomeHeader: {
+    paddingTop: 70,
+    paddingBottom: 50,
+    alignItems: 'center',
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  welcomeLogo: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 25,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    position: 'relative',
+  },
+  logoGlow: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  welcomeTitle: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 12,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 8,
+  },
+  welcomeSubtitle: {
+    fontSize: 16,
+    color: 'white',
+    textAlign: 'center',
+    opacity: 0.9,
+    paddingHorizontal: 30,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  header: {
+    paddingTop: 60,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  headerTitleContainer: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  headerTitle: {
+    color: 'white',
+    fontSize: 22,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  headerSubtitle: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+  },
+  headerButton: {
+    marginLeft: 15,
+    padding: 8,
+  },
+
+  // Theme Section
+  themeSection: {
+    marginBottom: 20,
+  },
+  themeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  themeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 12,
+    flex: 1,
+  },
+  themeIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+
+  // Feature Cards
+  featureCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    borderRadius: 20,
+    marginBottom: 16,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+    borderLeftWidth: 5,
+  },
+  iconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  featureText: {
+    flex: 1,
+  },
+  featureTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  featureDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  arrowContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Buttons
+  getStartedButton: {
+    margin: 25,
+    padding: 20,
+    borderRadius: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  getStartedText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginRight: 12,
+    letterSpacing: 0.5,
+  },
+
+  // Overview Card
+  overviewCard: {
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 24,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  overviewTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  overviewStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  overviewStat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  overviewNumber: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginVertical: 8,
+  },
+  overviewLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  overviewProgress: {
+    marginTop: 10,
+  },
+  progressLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  progressBar: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+
+  // Quick Actions
+  quickActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 24,
+    flexWrap: 'wrap',
+  },
+  quickAction: {
+    alignItems: 'center',
+    padding: 20,
+    borderRadius: 20,
+    minWidth: 100,
+    margin: 6,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  quickActionIcon: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  quickActionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  // Sync Button
+  syncButton: {
+    padding: 18,
+    borderRadius: 16,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  syncButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    marginLeft: 10,
+    fontSize: 16,
+  },
+
+  // Activity Section
+  activitySection: {
+    marginBottom: 20,
+  },
+  activityHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  seeAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 18,
+    borderRadius: 16,
+    marginBottom: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  activityIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  activityDetails: {
+    flex: 1,
+  },
+  activityText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  activityTime: {
+    fontSize: 13,
+  },
+  activityStatus: {
+    alignItems: 'flex-end',
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 2,
+  },
+  methodText: {
+    fontSize: 11,
+  },
+  emptyState: {
+    alignItems: 'center',
+    padding: 50,
+    borderRadius: 20,
+    marginTop: 10,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 12,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    marginTop: 6,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  // Navigation
+  navBar: {
+    flexDirection: 'row',
+    paddingVertical: 15,
+    borderTopWidth: 1,
+    shadowOffset: { width: 0, height: -5 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  navItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  navText: {
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  navTextActive: {
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: 'bold',
+  },
+
+  // Class Cards
+  classCard: {
+    padding: 20,
+    borderRadius: 20,
+    marginBottom: 16,
+    borderWidth: 2,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  classHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  classInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  className: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginLeft: 12,
+    flex: 1,
+  },
+  attendanceBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  attendanceText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  attendanceStats: {
+    marginBottom: 16,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statsLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  statsValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  attendanceBar: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  attendanceFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  classFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  footerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 12,
+    marginLeft: 6,
+  },
+  classActions: {
+    marginTop: 24,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  actionButton: {
+    flex: 1,
+    padding: 18,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 6,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  actionButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    marginLeft: 8,
+    fontSize: 14,
+  },
+
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'black',
+  },
+  modalHeader: {
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalTitle: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  camera: {
+    flex: 1,
+  },
+  cameraPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+  },
+  cameraText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 20,
+    textAlign: 'center',
+  },
+  faceFrame: {
+    position: 'absolute',
+    top: '30%',
+    alignSelf: 'center',
+    width: 220,
+    height: 220,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.8)',
+    borderRadius: 110,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  faceFrameInner: {
+    width: 180,
+    height: 180,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.5)',
+    borderRadius: 90,
+  },
+  faceFrameText: {
+    color: 'white',
+    marginTop: 240,
+    fontSize: 16,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  qrFrame: {
+    position: 'absolute',
+    top: '25%',
+    alignSelf: 'center',
+    width: 250,
+    height: 250,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  qrFrameText: {
+    color: 'white',
+    marginTop: 270,
+    fontSize: 16,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  qrCorner: {
+    position: 'absolute',
+    width: 35,
+    height: 35,
+    borderColor: Colors.primary,
+  },
+  qrCornerTL: {
+    top: 0,
+    left: 0,
+    borderLeftWidth: 4,
+    borderTopWidth: 4,
+  },
+  qrCornerTR: {
+    top: 0,
+    right: 0,
+    borderRightWidth: 4,
+    borderTopWidth: 4,
+  },
+  qrCornerBL: {
+    bottom: 0,
+    left: 0,
+    borderLeftWidth: 4,
+    borderBottomWidth: 4,
+  },
+  qrCornerBR: {
+    bottom: 0,
+    right: 0,
+    borderRightWidth: 4,
+    borderBottomWidth: 4,
+  },
+  cameraControls: {
+    position: 'absolute',
+    bottom: 50,
+    alignSelf: 'center',
+  },
+  captureButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: 'white',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+});
